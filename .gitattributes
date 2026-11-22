@@ -1,0 +1,19 @@
+# Text is normalized to LF in the repository.
+* text=auto
+
+# Windows launchers need CRLF.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+*.ps1           text eol=crlf
+
+# Unreal assets are binary: never diff, merge or convert line endings.
+*.uasset        binary
+*.umap          binary
+*.uexp          binary
+*.ubulk         binary
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.tga           binary
+*.wav           binary
+*.fbx           binary

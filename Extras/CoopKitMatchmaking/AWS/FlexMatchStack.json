@@ -1,0 +1,467 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "CoopKit Matchmaking: Amazon GameLift Servers FlexMatch in standalone mode for co-op matches of 2-4 players, with a small HTTP backend (Lambda function URL, SNS, DynamoDB). No AWS keys in the game. MIT License. Delete the stack to remove everything it created.",
+  "Parameters": {
+    "MinPlayers": {
+      "Type": "Number",
+      "Default": 2,
+      "MinValue": 2,
+      "MaxValue": 4,
+      "Description": "Fewest players of a match. A match this small is made only after FullMatchWaitSeconds."
+    },
+    "MaxPlayers": {
+      "Type": "Number",
+      "Default": 4,
+      "MinValue": 2,
+      "MaxValue": 4,
+      "Description": "Most players of a match. FlexMatch first looks for a full match."
+    },
+    "FullMatchWaitSeconds": {
+      "Type": "Number",
+      "Default": 10,
+      "MinValue": 1,
+      "MaxValue": 600,
+      "Description": "Seconds FlexMatch waits for a full match before it accepts MinPlayers. Must be less than RequestTimeoutSeconds."
+    },
+    "RequestTimeoutSeconds": {
+      "Type": "Number",
+      "Default": 60,
+      "MinValue": 10,
+      "MaxValue": 600,
+      "Description": "Seconds a ticket may wait before FlexMatch times it out."
+    },
+    "DefaultMode": {
+      "Type": "String",
+      "Default": "coop",
+      "AllowedPattern": "^[A-Za-z0-9-]{1,32}$",
+      "Description": "Mode of a player whose ticket has no Mode attribute (letters, digits, hyphens). Only players of the same Mode are matched."
+    },
+    "TokenLifetimeSeconds": {
+      "Type": "Number",
+      "Default": 21600,
+      "MinValue": 300,
+      "MaxValue": 86400,
+      "Description": "How long a player's session token from POST /v1/sessions is valid."
+    },
+    "ApiReservedConcurrency": {
+      "Type": "Number",
+      "Default": 0,
+      "MinValue": 0,
+      "MaxValue": 1000,
+      "Description": "Most API requests handled at once, to cap cost under abuse. 0 leaves it unlimited (new accounts cannot reserve concurrency)."
+    }
+  },
+  "Conditions": {
+    "HasApiConcurrencyLimit": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ApiReservedConcurrency"
+            },
+            0
+          ]
+        }
+      ]
+    }
+  },
+  "Resources": {
+    "RuleSet": {
+      "Type": "AWS::GameLift::MatchmakingRuleSet",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-coop-${MinPlayers}-${MaxPlayers}-${FullMatchWaitSeconds}-${DefaultMode}"
+        },
+        "RuleSetBody": {
+          "Fn::Sub": "{\"name\": \"coopkit-coop\", \"ruleLanguageVersion\": \"1.0\", \"playerAttributes\": [{\"name\": \"Mode\", \"type\": \"string\", \"default\": \"${DefaultMode}\"}], \"algorithm\": {\"strategy\": \"exhaustiveSearch\", \"batchingPreference\": \"random\", \"expansionAgeSelection\": \"oldest\"}, \"teams\": [{\"name\": \"coop\", \"minPlayers\": ${MaxPlayers}, \"maxPlayers\": ${MaxPlayers}}], \"rules\": [{\"name\": \"SameMode\", \"description\": \"Players of one match chose the same mode\", \"type\": \"batchDistance\", \"batchAttribute\": \"Mode\"}], \"expansions\": [{\"target\": \"teams[coop].minPlayers\", \"steps\": [{\"waitTimeSeconds\": ${FullMatchWaitSeconds}, \"value\": ${MinPlayers}}]}]}"
+        }
+      }
+    },
+    "MatchmakingConfiguration": {
+      "Type": "AWS::GameLift::MatchmakingConfiguration",
+      "DependsOn": [
+        "EventsTopicPolicy"
+      ],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-coop"
+        },
+        "Description": "CoopKit Matchmaking co-op queue (standalone)",
+        "FlexMatchMode": "STANDALONE",
+        "AcceptanceRequired": false,
+        "RequestTimeoutSeconds": {
+          "Ref": "RequestTimeoutSeconds"
+        },
+        "RuleSetName": {
+          "Ref": "RuleSet"
+        },
+        "NotificationTarget": {
+          "Ref": "EventsTopic"
+        }
+      }
+    },
+    "EventsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "DisplayName": "CoopKit FlexMatch events"
+      }
+    },
+    "EventsTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "EventsTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AllowFlexMatchToPublish",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "gamelift.amazonaws.com"
+              },
+              "Action": "sns:Publish",
+              "Resource": {
+                "Ref": "EventsTopic"
+              },
+              "Condition": {
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:gamelift:${AWS::Region}:${AWS::AccountId}:matchmakingconfiguration/${AWS::StackName}-coop"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TicketTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "BillingMode": "PAY_PER_REQUEST",
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "pk",
+            "AttributeType": "S"
+          }
+        ],
+        "KeySchema": [
+          {
+            "AttributeName": "pk",
+            "KeyType": "HASH"
+          }
+        ],
+        "TimeToLiveSpecification": {
+          "AttributeName": "expiresAt",
+          "Enabled": true
+        }
+      }
+    },
+    "EventsLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 7
+      }
+    },
+    "EventsRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "TicketEvents",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "dynamodb:UpdateItem",
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TicketTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "EventsLogGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EventsFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Metadata": {
+        "CoopKit::Source": "backend/events.js"
+      },
+      "Properties": {
+        "Description": "CoopKit Matchmaking: writes FlexMatch ticket events to the ticket table",
+        "Runtime": "nodejs24.x",
+        "Handler": "index.handler",
+        "Architectures": [
+          "arm64"
+        ],
+        "MemorySize": 128,
+        "Timeout": 10,
+        "Role": {
+          "Fn::GetAtt": [
+            "EventsRole",
+            "Arn"
+          ]
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "EventsLogGroup"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TicketTable"
+            }
+          }
+        },
+        "Code": {
+          "ZipFile": "// Copyright 2026 Ivan Iaitckikh. MIT License, see LICENSE in the Extras folder.\n'use strict';\n\n/*\n * CoopKit Matchmaking - FlexMatch event handler of the standalone backend (AWS Lambda subscribed to the SNS topic that\n * the matchmaking configuration notifies).\n *\n * FlexMatch publishes one event per ticket change (\"GameLift Matchmaking Event\", detail.type MatchmakingSearching,\n * MatchmakingSucceeded, MatchmakingTimedOut, MatchmakingCancelled, MatchmakingFailed, ...). This handler writes the new\n * status of every ticket in the event to the table that the HTTP API (api.js) reads. In standalone mode the\n * MatchmakingSucceeded event is the only place with the full player list of the match, so the API never needs\n * DescribeMatchmaking. Updates are idempotent (SNS may deliver an event twice) and never move a finished ticket.\n *\n * Code inline in the CloudFormation template (FlexMatchStack.json); after a change run \"node embed_backend.mjs\" in the\n * AWS folder to copy it into the template.\n */\n\nconst TICKET_PREFIX = 't#';\n\n/** detail.type -> the FlexMatch ticket status it sets; types not listed do not change the ticket. */\nconst STATUS_BY_EVENT = {\n  MatchmakingSearching: 'SEARCHING',\n  PotentialMatchCreated: 'PLACING',\n  MatchmakingSucceeded: 'COMPLETED',\n  MatchmakingTimedOut: 'TIMED_OUT',\n  MatchmakingCancelled: 'CANCELLED',\n  MatchmakingFailed: 'FAILED',\n};\n\n/**\n * What one FlexMatch event changes: a list of {ticketId, status, matchId?, players?, statusReason?, statusMessage?}.\n * Players of a match: detail.gameSessionInfo.players (playerId, team), each with the ticket that brought it.\n */\nfunction ticketUpdatesFromEvent(event) {\n  const detail = (event && event.detail) || {};\n  const status = STATUS_BY_EVENT[detail.type];\n  if (!status || !Array.isArray(detail.tickets)) return [];\n\n  let players;\n  if (status === 'COMPLETED') {\n    const ticketOf = {};\n    for (const ticket of detail.tickets) {\n      for (const player of ticket.players || []) ticketOf[player.playerId] = ticket.ticketId;\n    }\n    const source = (detail.gameSessionInfo && detail.gameSessionInfo.players) || detail.tickets.flatMap((t) => t.players || []);\n    players = source\n      .filter((p) => p && p.playerId)\n      .map((p) => ({ playerId: p.playerId, team: p.team || '', ticketId: ticketOf[p.playerId] || '' }));\n  }\n\n  return detail.tickets\n    .filter((ticket) => ticket && ticket.ticketId)\n    .map((ticket) => {\n      const update = { ticketId: ticket.ticketId, status };\n      if (status === 'COMPLETED') {\n        update.matchId = detail.matchId || '';\n        update.players = players;\n      }\n      if (detail.reason) update.statusReason = String(detail.reason);\n      if (detail.message) update.statusMessage = String(detail.message);\n      return update;\n    });\n}\n\n/** The FlexMatch events inside an SNS delivery to Lambda (Records[].Sns.Message is the event as JSON text). */\nfunction eventsFromSnsDelivery(delivery) {\n  const events = [];\n  for (const record of (delivery && delivery.Records) || []) {\n    const message = record && record.Sns && record.Sns.Message;\n    if (!message) continue;\n    try {\n      events.push(JSON.parse(message));\n    } catch {\n      console.warn('Skipping an SNS message that is not JSON');\n    }\n  }\n  return events;\n}\n\n/** UpdateItem input for one ticket update: only an existing ticket, never one that has already finished. */\nfunction makeUpdateInput(table, update, nowSeconds) {\n  const names = { '#s': 'status' };\n  const values = {\n    ':s': { S: update.status }, ':u': { N: String(nowSeconds) },\n    ':c': { S: 'COMPLETED' }, ':f': { S: 'FAILED' }, ':x': { S: 'CANCELLED' }, ':t': { S: 'TIMED_OUT' },\n  };\n  const sets = ['#s = :s', 'updatedAt = :u'];\n  if (update.matchId !== undefined) {\n    sets.push('matchId = :m');\n    values[':m'] = { S: update.matchId };\n  }\n  if (update.players !== undefined) {\n    sets.push('players = :p');\n    values[':p'] = { S: JSON.stringify(update.players) };\n  }\n  if (update.statusReason !== undefined) {\n    sets.push('statusReason = :r');\n    values[':r'] = { S: update.statusReason };\n  }\n  if (update.statusMessage !== undefined) {\n    sets.push('statusMessage = :g');\n    values[':g'] = { S: update.statusMessage };\n  }\n  return {\n    TableName: table,\n    Key: { pk: { S: TICKET_PREFIX + update.ticketId } },\n    UpdateExpression: `SET ${sets.join(', ')}`,\n    ConditionExpression: 'attribute_exists(pk) AND NOT (#s IN (:c, :f, :x, :t))',\n    ExpressionAttributeNames: names,\n    ExpressionAttributeValues: values,\n  };\n}\n\n/**\n * The SNS handler with its dependencies injected.\n * @param {object} deps\n * @param {{send: Function}} deps.dynamo  DynamoDB client.\n * @param {object} deps.commands  UpdateItemCommand.\n * @param {object} deps.env       TABLE_NAME.\n * @param {() => number} [deps.now]  Milliseconds since the epoch.\n */\nfunction createEventHandler(deps) {\n  const now = deps.now || (() => Date.now());\n  return async function handler(delivery) {\n    let applied = 0;\n    for (const event of eventsFromSnsDelivery(delivery)) {\n      for (const update of ticketUpdatesFromEvent(event)) {\n        try {\n          await deps.dynamo.send(new deps.commands.UpdateItemCommand(makeUpdateInput(deps.env.TABLE_NAME, update, Math.floor(now() / 1000))));\n          applied += 1;\n        } catch (error) {\n          // Unknown ticket (another backend, an expired item) or a ticket that has already finished: nothing to do.\n          if (!error || error.name !== 'ConditionalCheckFailedException') throw error;\n        }\n      }\n    }\n    return { applied };\n  };\n}\n\nlet defaultHandler = null;\n\n/** Lambda entry point: the AWS SDK from the runtime, the table from the environment of the function. */\nexports.handler = async (delivery) => {\n  if (!defaultHandler) {\n    const dynamoSdk = require('@aws-sdk/client-dynamodb');\n    defaultHandler = createEventHandler({\n      dynamo: new dynamoSdk.DynamoDBClient({}),\n      commands: { UpdateItemCommand: dynamoSdk.UpdateItemCommand },\n      env: process.env,\n    });\n  }\n  return defaultHandler(delivery);\n};\n\nexports.createEventHandler = createEventHandler;\nexports.ticketUpdatesFromEvent = ticketUpdatesFromEvent;\nexports.eventsFromSnsDelivery = eventsFromSnsDelivery;\nexports.makeUpdateInput = makeUpdateInput;\n"
+        }
+      }
+    },
+    "EventsSubscription": {
+      "Type": "AWS::SNS::Subscription",
+      "Properties": {
+        "TopicArn": {
+          "Ref": "EventsTopic"
+        },
+        "Protocol": "lambda",
+        "Endpoint": {
+          "Fn::GetAtt": [
+            "EventsFunction",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "EventsInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "EventsFunction"
+        },
+        "Principal": "sns.amazonaws.com",
+        "SourceArn": {
+          "Ref": "EventsTopic"
+        }
+      }
+    },
+    "ApiLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 7
+      }
+    },
+    "ApiRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "MatchmakingApi",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "gamelift:StartMatchmaking",
+                    "gamelift:StopMatchmaking"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "TicketTable",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "ApiLogGroup",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "ApiFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Metadata": {
+        "CoopKit::Source": "backend/api.js"
+      },
+      "Properties": {
+        "Description": "CoopKit Matchmaking: HTTP API of the FlexMatch backend",
+        "Runtime": "nodejs24.x",
+        "Handler": "index.handler",
+        "Architectures": [
+          "arm64"
+        ],
+        "MemorySize": 256,
+        "Timeout": 10,
+        "ReservedConcurrentExecutions": {
+          "Fn::If": [
+            "HasApiConcurrencyLimit",
+            {
+              "Ref": "ApiReservedConcurrency"
+            },
+            {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "ApiRole",
+            "Arn"
+          ]
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "ApiLogGroup"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "TABLE_NAME": {
+              "Ref": "TicketTable"
+            },
+            "CONFIGURATION_NAME": {
+              "Ref": "MatchmakingConfiguration"
+            },
+            "PLAYER_ATTRIBUTES": "Mode:S",
+            "TOKEN_LIFETIME_SECONDS": {
+              "Ref": "TokenLifetimeSeconds"
+            },
+            "TICKET_LIFETIME_SECONDS": "3600"
+          }
+        },
+        "Code": {
+          "ZipFile": "// Copyright 2026 Ivan Iaitckikh. MIT License, see LICENSE in the Extras folder.\n'use strict';\n\n/*\n * CoopKit Matchmaking - HTTP API of the FlexMatch standalone backend (AWS Lambda behind a function URL).\n *\n * The game talks only to this API; it never holds AWS keys. Routes (JSON in and out):\n *   POST   /v1/sessions      -> 200 {\"playerId\", \"token\", \"expiresIn\"}\n *   POST   /v1/tickets       {\"attributes\": {\"Mode\": \"coop\", \"Skill\": 12}, \"members\": [\"p-...\"]}\n *                            -> 200 {\"ticketId\", \"status\": \"QUEUED\"}\n *                            \"members\" is optional: the player ids of the rest of a group. The caller and the members become\n *                            the players of one FlexMatch ticket (all with the caller's attributes), so they land in one match.\n *   GET    /v1/tickets/{id}  -> 200 ticket view (below)\n *   DELETE /v1/tickets/{id}  -> 200 ticket view: CANCELLED, or COMPLETED when the match came first\n * Every route except /v1/sessions needs \"Authorization: Bearer <token>\"; a ticket is visible only to its player.\n *\n * Ticket view: {\"ticketId\", \"status\", \"statusReason\", \"statusMessage\", \"matchId\", \"players\": [{\"playerId\", \"team\", \"ticketId\"}]}\n * with status as in FlexMatch: QUEUED, SEARCHING, REQUIRES_ACCEPTANCE, PLACING, COMPLETED, FAILED, CANCELLED, TIMED_OUT.\n * FlexMatch reports progress as events (SNS -> events.js -> the table); this API reads the table, so polling it does not\n * call DescribeMatchmaking, which AWS says is \"not designed to be continually called\".\n *\n * Player identity: POST /v1/sessions gives every caller a new random guest id. To keep one id per player across sessions,\n * replace resolvePlayer with a check of your platform's identity token (for example an Epic Online Services ID token) that\n * returns the platform's stable player id.\n *\n * Code inline in the CloudFormation template (FlexMatchStack.json); after a change run \"node embed_backend.mjs\" in the\n * AWS folder to copy it into the template. Uses the AWS SDK for JavaScript v3 included in the nodejs24.x Lambda runtime.\n */\n\nconst crypto = require('node:crypto');\n\nconst TERMINAL_STATUSES = ['COMPLETED', 'FAILED', 'CANCELLED', 'TIMED_OUT'];\nconst SECRET_KEY = 'config#token-secret';\nconst TICKET_PREFIX = 't#';\nconst PLAYER_ID_PATTERN = /^[A-Za-z0-9-]{1,128}$/;\nconst TICKET_ID_PATTERN = /^[A-Za-z0-9-.]{1,128}$/;\n/** StartMatchmaking takes at most 10 players per request: the caller and 9 members. */\nconst MAX_GROUP_MEMBERS = 9;\n\n/** Reads \"Mode:S,Skill:N\" into {Mode: \"S\", Skill: \"N\"}: the player attributes of the rule set and their FlexMatch types. */\nfunction parseAttributeTypes(text) {\n  const types = {};\n  for (const part of String(text || '').split(',')) {\n    const [name, type] = part.split(':').map((s) => (s || '').trim());\n    if (name && (type === 'S' || type === 'N')) types[name] = type;\n  }\n  return types;\n}\n\n/**\n * FlexMatch PlayerAttributes from the ticket's attributes. Keys the rule set does not declare are left out: FlexMatch\n * requires \"Player attribute keys must match the playerAttributes used in a matchmaking rule set\".\n * @returns {{attributes?: object, error?: string}}\n */\nfunction toPlayerAttributes(attributes, types) {\n  const out = {};\n  for (const [key, value] of Object.entries(attributes || {})) {\n    const type = types[key];\n    if (!type) continue;\n    if (type === 'N') {\n      const number = typeof value === 'number' ? value : Number(String(value).trim());\n      if (String(value).trim() === '' || !Number.isFinite(number)) return { error: `attribute ${key} must be a number` };\n      out[key] = { N: number };\n    } else {\n      out[key] = { S: String(value) };\n    }\n  }\n  return { attributes: out };\n}\n\n/**\n * The ids of the rest of a group from the request body: absent means none.\n * @returns {{members?: string[], error?: string}}\n */\nfunction parseMembers(value, playerId) {\n  if (value === undefined) return { members: [] };\n  if (!Array.isArray(value)) return { error: 'members must be an array of player ids' };\n  if (value.length > MAX_GROUP_MEMBERS) return { error: `a group takes at most ${MAX_GROUP_MEMBERS} members besides its leader` };\n  const seen = new Set([playerId]);\n  for (const member of value) {\n    if (typeof member !== 'string' || !PLAYER_ID_PATTERN.test(member)) return { error: 'a member id must be 1-128 letters, digits and hyphens' };\n    if (seen.has(member)) return { error: `member id ${member} is in the group twice` };\n    seen.add(member);\n  }\n  return { members: value };\n}\n\nfunction base64url(buffer) {\n  return Buffer.from(buffer).toString('base64').replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n}\n\n/** Token \"<playerId>.<expiry, unix seconds>.<HMAC-SHA256 of both, base64url>\". */\nfunction signToken(secret, playerId, expiresAt) {\n  const payload = `${playerId}.${expiresAt}`;\n  return `${payload}.${base64url(crypto.createHmac('sha256', secret).update(payload).digest())}`;\n}\n\n/** @returns {string|null} the player id of a valid, unexpired token. */\nfunction verifyToken(secret, token, nowSeconds) {\n  const parts = String(token || '').split('.');\n  if (parts.length !== 3) return null;\n  const [playerId, expiry, signature] = parts;\n  if (!PLAYER_ID_PATTERN.test(playerId) || !/^\\d+$/.test(expiry)) return null;\n  const expected = Buffer.from(signToken(secret, playerId, expiry).split('.')[2]);\n  const given = Buffer.from(signature);\n  if (expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return null;\n  return Number(expiry) > nowSeconds ? playerId : null;\n}\n\n/** The ticket as the game sees it, from a table item (DynamoDB attribute values). */\nfunction ticketView(item) {\n  const view = { ticketId: item.pk.S.slice(TICKET_PREFIX.length), status: item.status.S };\n  if (item.statusReason) view.statusReason = item.statusReason.S;\n  if (item.statusMessage) view.statusMessage = item.statusMessage.S;\n  if (item.matchId) view.matchId = item.matchId.S;\n  if (item.players) view.players = JSON.parse(item.players.S);\n  return view;\n}\n\nfunction response(statusCode, body) {\n  return { statusCode, headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };\n}\n\nfunction errorResponse(statusCode, error, message) {\n  return response(statusCode, { error, message });\n}\n\nfunction readJsonBody(event) {\n  if (!event.body) return {};\n  const text = event.isBase64Encoded ? Buffer.from(event.body, 'base64').toString('utf8') : event.body;\n  try {\n    const value = JSON.parse(text);\n    return value && typeof value === 'object' && !Array.isArray(value) ? value : null;\n  } catch {\n    return null;\n  }\n}\n\nfunction isConditionFailure(error) {\n  return error && error.name === 'ConditionalCheckFailedException';\n}\n\n/**\n * The API handler with its dependencies injected: tests pass fake clients, the Lambda runtime the AWS SDK.\n * @param {object} deps\n * @param {{send: Function}} deps.gamelift   GameLift client.\n * @param {{send: Function}} deps.dynamo     DynamoDB client.\n * @param {object} deps.commands  StartMatchmakingCommand, StopMatchmakingCommand, GetItemCommand, PutItemCommand, UpdateItemCommand.\n * @param {object} deps.env       TABLE_NAME, CONFIGURATION_NAME, PLAYER_ATTRIBUTES, TOKEN_LIFETIME_SECONDS, TICKET_LIFETIME_SECONDS.\n * @param {() => number} [deps.now]  Milliseconds since the epoch.\n */\nfunction createApi(deps) {\n  const { gamelift, dynamo, commands, env } = deps;\n  const now = deps.now || (() => Date.now());\n  const table = env.TABLE_NAME;\n  const attributeTypes = parseAttributeTypes(env.PLAYER_ATTRIBUTES);\n  const tokenLifetime = Number(env.TOKEN_LIFETIME_SECONDS) || 21600;\n  const ticketLifetime = Number(env.TICKET_LIFETIME_SECONDS) || 3600;\n  let secret = null;\n\n  /** The signing secret: made on first use and kept in the table, so no secret has to be set at deployment. */\n  async function getSecret() {\n    if (secret) return secret;\n    const key = { pk: { S: SECRET_KEY } };\n    const found = await dynamo.send(new commands.GetItemCommand({ TableName: table, Key: key, ConsistentRead: true }));\n    if (found.Item) {\n      secret = found.Item.value.S;\n      return secret;\n    }\n    const fresh = crypto.randomBytes(32).toString('base64');\n    try {\n      await dynamo.send(new commands.PutItemCommand({\n        TableName: table,\n        Item: { ...key, value: { S: fresh } },\n        ConditionExpression: 'attribute_not_exists(pk)',\n      }));\n      secret = fresh;\n    } catch (error) {\n      if (!isConditionFailure(error)) throw error;\n      const again = await dynamo.send(new commands.GetItemCommand({ TableName: table, Key: key, ConsistentRead: true }));\n      secret = again.Item.value.S;\n    }\n    return secret;\n  }\n\n  /** Who the caller is. Replace to verify a platform identity token and return the platform's stable player id. */\n  async function resolvePlayer() {\n    return `p-${crypto.randomBytes(12).toString('hex')}`;\n  }\n\n  async function authenticate(event) {\n    const header = (event.headers && (event.headers.authorization || event.headers.Authorization)) || '';\n    const match = /^Bearer\\s+(\\S+)$/i.exec(header);\n    return match ? verifyToken(await getSecret(), match[1], Math.floor(now() / 1000)) : null;\n  }\n\n  async function getTicket(ticketId) {\n    const found = await dynamo.send(new commands.GetItemCommand({\n      TableName: table,\n      Key: { pk: { S: TICKET_PREFIX + ticketId } },\n      ConsistentRead: true,\n    }));\n    return found.Item || null;\n  }\n\n  async function createSession(event) {\n    const playerId = await resolvePlayer(event);\n    const expiresAt = Math.floor(now() / 1000) + tokenLifetime;\n    return response(200, { playerId, token: signToken(await getSecret(), playerId, expiresAt), expiresIn: tokenLifetime });\n  }\n\n  async function createTicket(event, playerId) {\n    const body = readJsonBody(event);\n    if (!body) return errorResponse(400, 'BadRequest', 'body must be a JSON object');\n    const converted = toPlayerAttributes(body.attributes, attributeTypes);\n    if (converted.error) return errorResponse(400, 'InvalidAttribute', converted.error);\n    const group = parseMembers(body.members, playerId);\n    if (group.error) return errorResponse(400, 'InvalidGroup', group.error);\n\n    const ticketId = `ckmm-${crypto.randomUUID()}`;\n    const nowSeconds = Math.floor(now() / 1000);\n    // The item exists before FlexMatch can send the first event for the ticket.\n    await dynamo.send(new commands.PutItemCommand({\n      TableName: table,\n      Item: {\n        pk: { S: TICKET_PREFIX + ticketId },\n        playerId: { S: playerId },\n        status: { S: 'QUEUED' },\n        updatedAt: { N: String(nowSeconds) },\n        expiresAt: { N: String(nowSeconds + ticketLifetime) },\n      },\n      ConditionExpression: 'attribute_not_exists(pk)',\n    }));\n    try {\n      await gamelift.send(new commands.StartMatchmakingCommand({\n        ConfigurationName: env.CONFIGURATION_NAME,\n        TicketId: ticketId,\n        Players: [playerId, ...group.members].map((id) => ({ PlayerId: id, PlayerAttributes: converted.attributes })),\n      }));\n    } catch (error) {\n      const message = String((error && error.message) || error);\n      await dynamo.send(new commands.UpdateItemCommand({\n        TableName: table,\n        Key: { pk: { S: TICKET_PREFIX + ticketId } },\n        UpdateExpression: 'SET #s = :s, statusReason = :r, statusMessage = :m',\n        ExpressionAttributeNames: { '#s': 'status' },\n        ExpressionAttributeValues: { ':s': { S: 'FAILED' }, ':r': { S: 'StartMatchmakingFailed' }, ':m': { S: message } },\n      }));\n      const invalid = error && error.name === 'InvalidRequestException';\n      return errorResponse(invalid ? 400 : 502, invalid ? 'InvalidRequest' : 'MatchmakingUnavailable', message);\n    }\n    return response(200, { ticketId, status: 'QUEUED' });\n  }\n\n  async function readTicket(ticketId, playerId) {\n    const item = await getTicket(ticketId);\n    if (!item || item.playerId.S !== playerId) return errorResponse(404, 'NotFound', 'no such ticket');\n    return response(200, ticketView(item));\n  }\n\n  async function cancelTicket(ticketId, playerId) {\n    const item = await getTicket(ticketId);\n    if (!item || item.playerId.S !== playerId) return errorResponse(404, 'NotFound', 'no such ticket');\n    if (TERMINAL_STATUSES.includes(item.status.S)) return response(200, ticketView(item));\n    try {\n      await gamelift.send(new commands.StopMatchmakingCommand({ TicketId: ticketId }));\n    } catch (error) {\n      // The ticket may have ended meanwhile (a match, a time-out): report what the table knows now.\n      const latest = await getTicket(ticketId);\n      if (latest && TERMINAL_STATUSES.includes(latest.status.S)) return response(200, ticketView(latest));\n      return errorResponse(502, 'MatchmakingUnavailable', String((error && error.message) || error));\n    }\n    try {\n      await dynamo.send(new commands.UpdateItemCommand({\n        TableName: table,\n        Key: { pk: { S: TICKET_PREFIX + ticketId } },\n        UpdateExpression: 'SET #s = :s, statusReason = :r',\n        ConditionExpression: 'NOT (#s IN (:c, :f, :x, :t))',\n        ExpressionAttributeNames: { '#s': 'status' },\n        ExpressionAttributeValues: {\n          ':s': { S: 'CANCELLED' }, ':r': { S: 'Cancelled' },\n          ':c': { S: 'COMPLETED' }, ':f': { S: 'FAILED' }, ':x': { S: 'CANCELLED' }, ':t': { S: 'TIMED_OUT' },\n        },\n      }));\n    } catch (error) {\n      if (!isConditionFailure(error)) throw error;\n    }\n    return response(200, ticketView(await getTicket(ticketId)));\n  }\n\n  return async function handler(event) {\n    const method = ((event.requestContext && event.requestContext.http && event.requestContext.http.method) || '').toUpperCase();\n    const path = (event.rawPath || '/').replace(/\\/+$/, '') || '/';\n    try {\n      if (method === 'POST' && path === '/v1/sessions') return await createSession(event);\n      const playerId = await authenticate(event);\n      if (path === '/v1/tickets' && method === 'POST') {\n        return playerId ? await createTicket(event, playerId) : errorResponse(401, 'Unauthorized', 'sign in with POST /v1/sessions');\n      }\n      const ticket = /^\\/v1\\/tickets\\/([^/]+)$/.exec(path);\n      if (ticket && (method === 'GET' || method === 'DELETE')) {\n        if (!playerId) return errorResponse(401, 'Unauthorized', 'sign in with POST /v1/sessions');\n        const ticketId = decodeURIComponent(ticket[1]);\n        if (!TICKET_ID_PATTERN.test(ticketId)) return errorResponse(404, 'NotFound', 'no such ticket');\n        return method === 'GET' ? await readTicket(ticketId, playerId) : await cancelTicket(ticketId, playerId);\n      }\n      return errorResponse(404, 'NotFound', `no route ${method} ${path}`);\n    } catch (error) {\n      console.error('Request failed', method, path, error);\n      return errorResponse(500, 'InternalError', 'the backend failed; see its log');\n    }\n  };\n}\n\nlet defaultHandler = null;\n\n/** Lambda entry point: the AWS SDK from the runtime, settings from the environment of the function. */\nexports.handler = async (event) => {\n  if (!defaultHandler) {\n    const gameLiftSdk = require('@aws-sdk/client-gamelift');\n    const dynamoSdk = require('@aws-sdk/client-dynamodb');\n    defaultHandler = createApi({\n      gamelift: new gameLiftSdk.GameLiftClient({}),\n      dynamo: new dynamoSdk.DynamoDBClient({}),\n      commands: {\n        StartMatchmakingCommand: gameLiftSdk.StartMatchmakingCommand,\n        StopMatchmakingCommand: gameLiftSdk.StopMatchmakingCommand,\n        GetItemCommand: dynamoSdk.GetItemCommand,\n        PutItemCommand: dynamoSdk.PutItemCommand,\n        UpdateItemCommand: dynamoSdk.UpdateItemCommand,\n      },\n      env: process.env,\n    });\n  }\n  return defaultHandler(event);\n};\n\nexports.createApi = createApi;\nexports.parseAttributeTypes = parseAttributeTypes;\nexports.toPlayerAttributes = toPlayerAttributes;\nexports.parseMembers = parseMembers;\nexports.signToken = signToken;\nexports.verifyToken = verifyToken;\n"
+        }
+      }
+    },
+    "ApiUrl": {
+      "Type": "AWS::Lambda::Url",
+      "Properties": {
+        "AuthType": "NONE",
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "ApiFunction",
+            "Arn"
+          ]
+        }
+      }
+    },
+    "ApiUrlInvokeUrlPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunctionUrl",
+        "FunctionName": {
+          "Ref": "ApiFunction"
+        },
+        "Principal": "*",
+        "FunctionUrlAuthType": "NONE"
+      }
+    },
+    "ApiUrlInvokeFunctionPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Ref": "ApiFunction"
+        },
+        "Principal": "*",
+        "InvokedViaFunctionUrl": true
+      }
+    }
+  },
+  "Outputs": {
+    "ApiUrl": {
+      "Description": "Base Url of the provider in the queue Data Asset (remove the trailing slash).",
+      "Value": {
+        "Fn::GetAtt": [
+          "ApiUrl",
+          "FunctionUrl"
+        ]
+      }
+    },
+    "MatchmakingConfigurationName": {
+      "Description": "FlexMatch matchmaking configuration of this stack.",
+      "Value": {
+        "Ref": "MatchmakingConfiguration"
+      }
+    },
+    "TicketTableName": {
+      "Description": "DynamoDB table with the tickets (items expire after an hour).",
+      "Value": {
+        "Ref": "TicketTable"
+      }
+    }
+  }
+}

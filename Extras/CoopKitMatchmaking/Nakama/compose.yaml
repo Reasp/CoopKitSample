@@ -1,0 +1,71 @@
+# Local Nakama server for developing and testing the CoopKit Matchmaking Nakama provider.
+# Licensed under the MIT License (see ../LICENSE). Based on the official compose file of Heroic Labs:
+# https://heroiclabs.com/docs/nakama/getting-started/install/docker/ (checked 2026-11-14: Nakama 3.37.0, PostgreSQL 16.8).
+#
+# Start:   docker compose -f compose.yaml up -d
+# Stop:    docker compose -f compose.yaml down
+# Remove everything, the database included:  docker compose -f compose.yaml down -v --rmi all
+#
+# Differences from the official file, all for a development machine:
+#   - every port listens on 127.0.0.1 only, and PostgreSQL publishes no port at all (only Nakama reaches it);
+#   - the database lives in the named volume coopkit-nakama_data, not in this folder;
+#   - the matchmaker runs every 2 seconds instead of 15, so test matches form quickly;
+#   - the server key, the HTTP key and the console login come from environment variables, with Nakama's defaults for local use;
+#   - the CoopKit server module: ./modules is mounted as the module folder and coopkit_matchmaking.js is the JavaScript entry
+#     point (it reads ./modules/coopkit_queues.json, which sync_queue.mjs writes).
+# The defaults (server key "defaultkey", HTTP key "defaulthttpkey", console admin/password, database password "localdb") are public.
+# Never expose this setup on the internet as is: see README.md, "Security".
+
+name: coopkit-nakama
+
+services:
+  postgres:
+    image: postgres:16.8-alpine
+    environment:
+      - POSTGRES_DB=nakama
+      - POSTGRES_PASSWORD=localdb
+    volumes:
+      - data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "nakama"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+
+  nakama:
+    image: heroiclabs/nakama:3.37.0
+    entrypoint:
+      - "/bin/sh"
+      - "-ecx"
+      - >
+          /nakama/nakama migrate up --database.address postgres:localdb@postgres:5432/nakama &&
+          exec /nakama/nakama --name nakama1
+          --database.address postgres:localdb@postgres:5432/nakama
+          --logger.level INFO
+          --session.token_expiry_sec 7200
+          --socket.server_key "${NAKAMA_SERVER_KEY:-defaultkey}"
+          --console.username "${NAKAMA_CONSOLE_USER:-admin}"
+          --console.password "${NAKAMA_CONSOLE_PASSWORD:-password}"
+          --matchmaker.interval_sec 2
+          --runtime.http_key "${NAKAMA_HTTP_KEY:-defaulthttpkey}"
+          --runtime.js_entrypoint coopkit_matchmaking.js
+    volumes:
+      # The module folder: runtime.path defaults to <data_dir>/modules, and data_dir is /nakama/data in the image.
+      - ./modules:/nakama/data/modules:ro
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # 7349 gRPC API, 7350 REST API and realtime socket (the plugin uses this one), 7351 web console.
+      - "127.0.0.1:7349:7349"
+      - "127.0.0.1:7350:7350"
+      - "127.0.0.1:7351:7351"
+    healthcheck:
+      test: ["CMD", "/nakama/nakama", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  data:

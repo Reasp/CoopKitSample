@@ -1,0 +1,116 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.4",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "CoopPlugins",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "CoopKitSampleBridges",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "CoopKitSampleTests",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "CommonUI",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitSessions",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitRevive",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitSave",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitPing",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitAI",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitInventory",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitCombat",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitMatchmaking",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitDraft",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitHeroes",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitLoot",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitHostMigration",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitParty",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitCraft",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitObjectives",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitSupport",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitRun",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitCarry",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitVoice",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitTraversal",
+			"Enabled": true
+		}
+	]
+}

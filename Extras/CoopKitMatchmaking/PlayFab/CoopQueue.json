@@ -1,0 +1,35 @@
+{
+  "Name": "Coop",
+  "MinMatchSize": 2,
+  "MaxMatchSize": 4,
+  "MaxTicketSize": 4,
+  "ServerAllocationEnabled": false,
+  "StringEqualityRules": [
+    {
+      "Name": "SameMode",
+      "Attribute": { "Path": "Mode", "Source": "User" },
+      "AttributeNotSpecifiedBehavior": "UseDefault",
+      "DefaultAttributeValue": "coop",
+      "Weight": 1
+    },
+    {
+      "Name": "SameRegion",
+      "Attribute": { "Path": "Region", "Source": "User" },
+      "AttributeNotSpecifiedBehavior": "MatchAny",
+      "Weight": 1,
+      "SecondsUntilOptional": 30
+    }
+  ],
+  "DifferenceRules": [
+    {
+      "Name": "CloseSkill",
+      "Attribute": { "Path": "Skill", "Source": "User" },
+      "AttributeNotSpecifiedBehavior": "MatchAny",
+      "Difference": 5,
+      "MergeFunction": "Average",
+      "LinearExpansion": { "Delta": 5, "Limit": 50, "SecondsBetweenExpansions": 10 },
+      "Weight": 1,
+      "SecondsUntilOptional": 60
+    }
+  ]
+}

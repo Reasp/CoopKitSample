@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "queues": {
+    "Coop": {
+      "queue": "Coop",
+      "minCount": 2,
+      "maxCount": 4,
+      "matchKeys": [
+        "Mode"
+      ],
+      "numericKeys": [],
+      "defaults": {
+        "Mode": "coop"
+      },
+      "queueProperty": "CKMM_Queue"
+    }
+  }
+}
