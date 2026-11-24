@@ -24,6 +24,10 @@ Unreal Engine 5.6, 5.7 and 5.8. Platform: Windows (Win64).
 
 Install the plugin from Fab, then enable **CoopKit Craft** in *Edit > Plugins* and restart the editor. No other plugin is required.
 
+## Editor tools, step by step
+
+[EditorTools.md](EditorTools.md) shows the editor tools of this plugin in screenshots. You use the mouse for all of them. You type only the name of a new asset and, in the Recipe Table, the values you edit in your own spreadsheet.
+
 ## Quick start
 
 The plugin ships a demo that is ready to play. Open the map and click **Play**. You do everything with the mouse, on a panel of buttons in the top left corner of each game window. The panel shows your bag, the workbench's recipes and queue, and tells you what to do next. The demo has no loot, so the panel hands out materials.
@@ -91,6 +95,8 @@ The bots are local players without a view of their own, so the plugin treats the
 
 Create them in the Content Browser (*Add > CoopKit > Recipe*, *Station* or *Building*) or with **New Recipe**, **New Station** and **New Building** in the CoopKit Hub. The wizards ask for the name, the items, the craft or build time, the recipes, the queue length, the footprint and who pays, and create the asset in a folder of its own. A double click opens the card: *Properties*, *Summary* (what goes in and out, problems of the data), *Validation* (problems, refreshed on every change), *Parts* and *Preview*.
 
+**Tools > Recipe Table** lists every recipe with its inputs, outputs, time and data check. **Export CSV** writes the recipes to a file for a spreadsheet, one row per recipe; **Import CSV** applies an edited file back, as one undo step. You pick the file in the system dialog. The columns are `Asset` (the recipe's object path, names the row), `EntityId`, `DisplayName`, `CraftSeconds`, `StationTags` (tags separated by `;`), `Inputs` and `Outputs` (`ItemId:Count` separated by `;`, for example `Scrap:6; Biogel:2`), `Icon` and `ProgressCurve` (object paths, or empty). An item keeps its display name and item asset when its id stays in the cell. A row is applied whole or not at all: a count that is not a whole number of at least 1, an unknown tag, a path that is no object path, an item listed twice, a time that is not a number or is negative, an empty name, or an id another recipe already has refuses the row, and the text below the list names the row and the column. The other rows are still applied.
+
 | Data type | What it sets | Validation |
 |---|---|---|
 | `UCKCraftRecipeData` (*Recipe*) | Name and icon; *Inputs* and *Outputs* (item id, display name, optional item asset, count); *Craft Seconds*; *Station Tags* (made only on stations with one of them); an optional progress curve that shapes the shown progress. | Name and id required; at least one input and one output; every item has an id and a count of at least 1; no item listed twice; craft time not negative. |
@@ -134,7 +140,7 @@ Editor automation tests (Session Frontend, filter `CoopKit.Craft`):
 - Construction sites and buildings are actors spawned during play. To keep them in saves, your save system must spawn them again; the station component of a site keeps its job in SaveGame properties like a workbench.
 - Ground is World Static: a building does not stand on a moving platform.
 - Recipes, stations and buildings are referenced over the network. Use saved assets, not objects made at runtime: a transient object does not replicate.
-- Import and export of recipes as CSV is not part of this version.
+- CSV import changes recipes only. It does not create or delete them.
 - Dedicated servers are tested in the editor on a dedicated server world.
 
 ## AI agent skills

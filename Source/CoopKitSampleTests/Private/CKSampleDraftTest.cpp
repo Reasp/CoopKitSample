@@ -4,6 +4,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "CKSampleLobbyTestHelpers.h"
 #include "CKSampleNetTestSession.h"
+#include "CKSampleTestHelpers.h"
 #include "Components/ActorComponent.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
@@ -92,14 +93,6 @@ namespace CKSample::Tests
 				Worlds.Add(Session.GetServerWorld());
 			}
 			return Worlds;
-		}
-
-		bool HasComponentNamed(const AActor* Actor, const TCHAR* ClassName)
-		{
-			return Actor != nullptr && Actor->GetComponents().Array().ContainsByPredicate([ClassName](const UActorComponent* Component)
-			{
-				return Component != nullptr && Component->GetClass()->GetName() == ClassName;
-			});
 		}
 
 		/** Every player has the lobby's ready component (player state) and the draft's player component (controller). */

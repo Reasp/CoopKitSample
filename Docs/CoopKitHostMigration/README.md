@@ -41,6 +41,17 @@ In your project:
 3. Mark what must survive a migration. Properties of player states, pawns and the game state need the `SaveGame` flag. Actors on the map also need the **CoopKit Host Migration Tracked** component. Players' pawns need no component.
 4. Show a message on **On Host Lost** and hide it on **On Migration Finished**. The report says how the migration ended and how long it took.
 
+## Overview map
+
+Open `/CoopKitHostMigration/Maps/L_HostMigrationOverview` and click **Play**. Nothing migrates on this map, because a migration needs one game per player. Four boards run the plugin's rules in a loop, with the plugin's own functions:
+
+- the successor order;
+- a real light snapshot of the map, only captured and never applied. It is cut into pieces and checked by length and SHA-1, and one piece is changed on the way, so the check catches it;
+- the bandwidth budget with the default profile;
+- two hosts of one group.
+
+Stand 5 points to the demo map `/CoopKitHostMigration/Maps/L_HostMigrationDemo`, where a real migration runs in three windows.
+
 ## How a migration works
 
 1. The host sends a snapshot every **Snapshot Interval Seconds** and one second after a new player joins. **Send Snapshot Now** sends one at once, for example at a checkpoint.
@@ -100,6 +111,20 @@ Run them in *Tools > Session Frontend > Automation* with the filter `CoopKit.Hos
 - `Net.TwoHosts`: two players host the group at once, one hands over, and a search finds one session of the group.
 - `Data.ProfileEditor`, `Hub.*`, `Workspace.*`, `Skills.*`: the profile, its editor window, the wizard and the hub.
 - `Demo.*`: the demo with the mouse in three windows, and the **Play with 3 windows** button.
+- `Overview`, `Showcase.Boards`: the overview map with a server and a client (every board plays its loop, its texts fit the board, the client sees them), and the boards' texts without a map.
+
+## What is tested
+
+Tested:
+
+- On the Null online subsystem (LAN), by the plugin's automation tests in the editor: three players in one editor process, with 150 ms lag and 2% packet loss on every connection. The tests cover a host that leaves, a host that crashes, a second migration in a row, a player who rejoins, and two hosts of one group. The downtime table above comes from these runs.
+- The demo in three windows with mouse clicks only, by the automation tests (`Demo.*`).
+- The overview map, by the automation tests (`Overview`, `Showcase.Boards`): the four boards play their loops, with a server and a client. No migration runs on that map.
+
+Not tested live yet:
+
+- Steam and EOS. The default session driver uses the engine's Online Subsystem calls, the same calls as on Null, but no migration has run on Steam or EOS with real accounts on two machines yet. Test your Steam or EOS setup on two machines before you rely on it.
+- The downtime in a packaged game: it is measured in the editor only.
 
 ## Limitations and known issues
 

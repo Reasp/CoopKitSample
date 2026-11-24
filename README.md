@@ -1,6 +1,6 @@
 # CoopKit Sample
 
-A co-op sandbox for Unreal Engine built from 20 CoopKit plugins: sessions, lobby, party and matchmaking, a hero draft, revive, host-side save and host migration, pings, enemy AI, inventory and loot, melee combat and support abilities, crafting, quests, carrying, parkour, proximity voice and a roguelite run. It is also my portfolio as a multiplayer engineer.
+A co-op sandbox for Unreal Engine built from 22 CoopKit plugins: sessions, lobby, party and matchmaking, a hero draft, revive, host-side save and host migration, pings, enemy AI, inventory and loot, melee combat and support abilities, crafting, quests, carrying, parkour, doors and locks for several players, proximity voice, a roguelite run and network testing in the editor. It is also my portfolio as a multiplayer engineer.
 
 ## What I can do in your project
 
@@ -20,7 +20,7 @@ I do not take on MMOs and server meshing, anti-cheat, server orchestration or fl
 
 The complete sample project: framework code, the bridges that connect it to the plugins, automation tests, maps, data and config. The project file is still called `CoopPlugins.uproject`, after the framework module's name.
 
-**It builds and runs only with the CoopKit plugins installed.** The free plugin, CoopKit Sessions, is already in `Plugins/`. The other 19 are paid plugins; some are still on their way to Fab (see the table). The bridges module links all of them, and the maps use their assets. Without them you can still read the code, the architecture and the plugin documentation in `Docs/`.
+**It builds and runs only with the CoopKit plugins installed.** The free plugin, CoopKit Sessions, is already in `Plugins/`. The other 21 are paid plugins; some are still on their way to Fab (see the table). The bridges module links all of them, and the maps use their assets. Without them you can still read the code, the architecture and the plugin documentation in `Docs/`.
 
 ## The CoopKit plugins
 
@@ -48,8 +48,8 @@ Each plugin works on its own: none depends on another CoopKit plugin.
 | CoopKit Traversal | Predicted vaults, mantles and climbs, plus two-player boosts, pull-ups and launches. | Paid | `Docs/CoopKitTraversal/README.md` | In review on Fab |
 | CoopKit Voice | Proximity voice where the server decides who hears whom: walls, a team radio, rules by Gameplay Tags. | Paid | `Docs/CoopKitVoice/README.md` | In review on Fab |
 | CoopKit Run | A co-op roguelite run: one seed builds the same rooms everywhere, hidden upgrade picks, door votes, meta progress. | Paid | `Docs/CoopKitRun/README.md` | In review on Fab |
-
-The line also has CoopKit NetTest (network presets, one-click sessions and a stats overlay in the editor, [Fab](https://www.fab.com/listings/3fdcbfe0-c1aa-443a-9049-4db4f811b9af)) and CoopKit Interact (locks, hold progress and two-player doors, [Fab](https://www.fab.com/listings/a00f1f98-7eeb-410f-9de2-b6b9782d5b8d)). The sample does not use either of them.
+| CoopKit Interact | Doors, levers and valves several players reach for at once: the server decides, one player at a time where it must be, hold progress on the server clock, doors that need two. | Paid | `Docs/CoopKitInteract/README.md` | [Fab](https://www.fab.com/listings/a00f1f98-7eeb-410f-9de2-b6b9782d5b8d) |
+| CoopKit NetTest | Network presets for Play In Editor, one-click sessions with a listen or dedicated server, a stats overlay. | Paid | `Docs/CoopKitNetTest/README.md` | [Fab](https://www.fab.com/listings/3fdcbfe0-c1aa-443a-9049-4db4f811b9af) |
 
 ## Build and run
 
@@ -57,7 +57,8 @@ The line also has CoopKit NetTest (network presets, one-click sessions and a sta
 2. Get the paid plugins on Fab and install them to your engine. Until every plugin of the table is on Fab, the project does not build with plugins from Fab alone.
 3. Right-click `CoopPlugins.uproject` > *Generate Visual Studio project files*, then build the *Development Editor* configuration and open the project. The project is saved in an older engine version: when the editor offers to convert it, choose *Open a Copy*, so the original stays unchanged.
 4. Play: *Play > Number of Players* 2, *Net Mode* *Play Standalone*, *Run Under One Process* on; open `L_MainMenu` and press Play. Click **Host** in one window and **Find sessions** in the other, then press **Ready** in both.
-5. Tests: *Tools > Session Frontend > Automation*, filter `CoopKit.Sample`, or the console command `Automation RunTests CoopKit.Sample`.
+5. Or open `L_ProvingGround` and click **Net Play** in the toolbar (CoopKit NetTest): a listen server and one client start under 150 ms lag and 2% loss, the network of the sample's tests. In the **Net** menu next to it, **Show network stats overlay** shows the ping and the loss in each window.
+6. Tests: *Tools > Session Frontend > Automation*, filter `CoopKit.Sample`, or the console command `Automation RunTests CoopKit.Sample`.
 
 **Character art.** The sample does not include Epic's mannequins. Characters use the engine's tutorial mannequin, or a plain cylinder if it is missing. To get Manny, copy `Mannequins` from the Third Person template in your UE install (`Templates/TemplateResources/High/Characters/Content/Mannequins`) into `Content/Characters/Mannequins` of this project. Keep that path, then restart the editor. The folder is git-ignored. Check the Unreal Engine EULA before you share a project that contains it.
 
@@ -68,7 +69,7 @@ The line also has CoopKit NetTest (network presets, one-click sessions and a sta
 | `L_MainMenu` | The game's default map: **Host** opens the lobby as a listen server, **Find sessions** lists games to join. |
 | `L_Lobby` | Lobby with ready flags and a countdown, then seamless travel to the match. |
 | `L_DraftLobby` | The same lobby with a hero draft of CoopKit Draft from the CoopKit Heroes assets. |
-| `L_ProvingGround` | The match: revive, save (host: F5/F9), pings, inventory, loot, melee combat, heroes, support abilities, crafting, carrying and parkour. A sword, armor and potions lie in front of the spawn points. |
+| `L_ProvingGround` | The match: revive, save (host: F5/F9), pings, inventory, loot, melee combat, heroes, support abilities, crafting, carrying, parkour and interactions. A sword, armor and potions lie in front of the spawn points. At the right edge stand five devices: a valve, a lock pick for one player at a time, a heavy door for two players, a chest, and a hatch that opens only with the chest's key. Press V in front of one; hold it for the valve, the lock pick, the door and the hatch. |
 | `L_AIArena` | Three enemies of CoopKit AI on a navigation mesh, with combat, revive and pings. |
 | `L_Complete` | Six plugins in one match, played by two bots in a loop. A ping draws the enemies, the bots fight with a sword combo, one goes down and is revived, then the host saves. |
 
@@ -76,7 +77,7 @@ The framework module `CoopPlugins` (game mode, game state, player state, player 
 
 | Bridge | Links |
 |---|---|
-| Revive, Save, Ping, AI, Inventory, Combat, Heroes, Carry, Sessions UI, Party menu | the sample and one plugin each |
+| Revive, Save, Ping, AI, Inventory, Combat, Heroes, Carry, Interact, Sessions UI, Party menu | the sample and one plugin each |
 | Matchmaking -> Sessions; Party -> Sessions; Party <-> Matchmaking | a match or a party lands in one session |
 | Draft <-> Sessions lobby; Heroes <-> Draft | the lobby runs the draft; the draft picks from the hero assets |
 | Heroes -> Combat, Inventory, Revive | hero modules give abilities, starting items and revive settings |
@@ -88,6 +89,7 @@ The framework module `CoopPlugins` (game mode, game state, player state, player 
 | Objectives <-> Save; Objectives -> Ping | the quest log is saved; a new step pings its target |
 | Run <-> Save; Revive -> Run | the run is saved; a team wipe ends the run |
 | Carry <-> Revive; Traversal <- Revive | a downed player can be towed; downed players do not climb |
+| Interact <-> Inventory; Interact <- Revive | a chest gives the key that opens a hatch; downed players cannot interact |
 | Support -> Combat, Revive | support abilities heal and shield Combat attributes; downed players are refused |
 | Voice <- Revive, Inventory | downed players whisper, the dead talk to the dead, a radio item opens the team channel |
 | Inventory -> Combat | content only: the sample sword grants a combat attack |
@@ -105,7 +107,7 @@ flowchart TB
     subgraph game["Game process: listen server host or client [Software System]"]
         framework["CoopPlugins module<br/>[Container: C++]<br/>Game mode, game state, player state,<br/>controller, character. No plugin dependency."]
         bridges["CoopKitSampleBridges module<br/>[Container: C++]<br/>One world subsystem per link;<br/>menu and lobby screens (CommonUI)."]
-        plugins["CoopKit plugins<br/>[Container: C++ plugins]<br/>Sessions (free) and<br/>19 paid plugins."]
+        plugins["CoopKit plugins<br/>[Container: C++ plugins]<br/>Sessions (free) and<br/>21 paid plugins."]
         content["Content and config<br/>[Container: assets, ini]<br/>Maps, data assets, input;<br/>bridge map lists in DefaultGame.ini."]
         tests["CoopKitSampleTests module<br/>[Container: C++, editor only]<br/>Server and two clients in one process,<br/>150 ms lag, 2% loss."]
     end

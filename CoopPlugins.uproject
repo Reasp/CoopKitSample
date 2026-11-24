@@ -33,6 +33,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "CoopKitNetTest",
+			"Enabled": true
+		},
+		{
 			"Name": "CoopKitSessions",
 			"Enabled": true
 		},
@@ -70,6 +74,10 @@
 		},
 		{
 			"Name": "CoopKitHeroes",
+			"Enabled": true
+		},
+		{
+			"Name": "CoopKitInteract",
 			"Enabled": true
 		},
 		{

@@ -93,5 +93,9 @@ public class CoopKitSampleBridges : ModuleRules
 		// characters with the sample's crate and chest, and a downed player as a body to tow: CoopKit Revive's tag is read by
 		// name in the body's data, Revive's events end the tow (Revive is added above).
 		PrivateDependencyModuleNames.Add("CoopKitCarry");
+		// CKSampleInteractBridge and CKSampleInteractInventoryBridge (TASK-154): the CoopKit Interact interactor on the sample's
+		// player controllers and the devices of L_ProvingGround; a key from a CoopKit Inventory item opens the hatch and the
+		// chest gives it (Inventory is added above). CoopKit Revive keeps downed players out by its tags in the data only.
+		PrivateDependencyModuleNames.Add("CoopKitInteract");
 	}
 }

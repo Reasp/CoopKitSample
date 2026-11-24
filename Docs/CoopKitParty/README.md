@@ -269,10 +269,28 @@ Run them in *Tools > Session Frontend > Automation* with the filter `CoopKit.Par
 - `Invites.Privacy`: a Friends Only party takes a friend of the leader and a friend of a member and refuses a stranger; an Invite Only party takes a friend with an accepted invite and refuses one without.
 - `Demo.Party`: three demo windows form a party with mouse clicks only: create, find and join, Ready, a chat phrase, Friends, kick, leave.
 - `Demo.Gamepad`: two demo windows do the same with the gamepad only.
-- `Demo.RestartPlay`, `Demo.MapsLoad`, `Showcase.Boards`: Play with 3 windows, the demo and overview maps, the stands' texts.
+- `Demo.RestartPlay`, `Demo.MapsLoad`, `Showcase.Boards`: Play with 3 windows, the demo and overview maps, the boards' texts and tiles.
 - `Data.ProfileEditor`, `Hub.*`, `Workspace.*`, `Skills.*`, `Tags.*`: the profile, its editor window, the wizard and the hub.
 
 The `Net.*` tests start three or four Play In Editor instances in one editor process and also run without a window.
+
+## What is tested
+
+Tested:
+
+- On the Null online subsystem (LAN), by the plugin's automation tests: three or four Play In Editor instances in one editor process. The tests cover the party, leader changes after a leave and after a crash, map changes, going into a match and back, member attributes, and invites and privacy with stand-in friends (see *Automation tests*). The beacon test adds 150 ms lag and 2% packet loss on every connection.
+- The demo with mouse clicks only and with the gamepad only, by the automation tests (`Demo.*`).
+
+Not tested live yet:
+
+- Steam and EOS with real accounts on two machines: the party lobby, the beacon over the platform's transport, friends, invites, the Steam overlay, joining a friend and starting the game from an invite. The plugin uses the engine's Online Subsystem calls, the same calls as on Null, but they are not verified on Steam or EOS yet. Test your Steam or EOS setup on two machines before you rely on it.
+
+No automated test covers:
+
+- an invite accepted during a match;
+- a member whose ticket confirmation arrives late.
+
+See *Limitations and known issues*.
 
 ## Limitations and known issues
 

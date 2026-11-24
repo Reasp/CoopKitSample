@@ -16,6 +16,8 @@ Sections used in a version (omit the empty ones):
 
 ### Added
 
+- Recipe Table window (*Tools > Recipe Table*): every recipe of the project in one list, with **Export CSV** and **Import CSV** for balancing in a spreadsheet. Import checks each row (its cells, the recipe's data check, a free id). A row is applied whole or not at all, and a mistake is reported with its row and column. All applied rows are one undo step.
+- `Docs/EditorTools.md`: the editor tools of the plugin step by step, with screenshots. All tools work with the mouse; typing is needed only for asset names and, in the Recipe Table, for the CSV file.
 - Editor surface for AI agents: `UCKCraftAgentLibrary` (`unreal.CKCraftAgentLibrary` in Python, also callable from Editor Utility Blueprints) lists, creates, describes, validates, exports and imports the plugin's data assets and runs the project check, answering in JSON. The AI agent skill has a new section, "Drive the editor", with Python examples.
 
 ## [1.1.0] - 2026-11-20
